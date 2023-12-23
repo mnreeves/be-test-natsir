@@ -77,13 +77,70 @@ UserTable.init(
     underscored: true,
   }
 );
-
 UserTable.sync();
+
+class WalletTable extends Model<
+  InferAttributes<WalletTable>,
+  InferCreationAttributes<WalletTable>
+> {
+  declare walletId: CreationOptional<string>;
+  declare userId: string;
+  declare balance: number;
+  declare createdAt: CreationOptional<string>;
+  declare updatedAt: CreationOptional<string>;
+}
+
+WalletTable.init(
+  {
+    walletId: {
+      type: DataTypes.UUID,
+      defaultValue: DataTypes.UUIDV4,
+      allowNull: false,
+      primaryKey: true,
+    },
+    userId: {
+      type: DataTypes.UUID,
+      allowNull: false,
+      unique: true,
+    },
+    balance: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      defaultValue: 0,
+    },
+    createdAt: {
+      type: DataTypes.DATE,
+      defaultValue: Sequelize.fn("now"),
+    },
+    updatedAt: {
+      type: DataTypes.DATE,
+      defaultValue: Sequelize.fn("now"),
+    },
+  },
+  {
+    sequelize: dbConnection,
+    timestamps: true,
+    tableName: "tb_wallets",
+    underscored: true,
+  }
+);
+WalletTable.sync();
+
+UserTable.hasOne(WalletTable, {
+  as: "Wallet",
+  foreignKey: "userId",
+});
+
+WalletTable.belongsTo(UserTable, {
+  as: "User",
+  foreignKey: "userId",
+});
 
 // app
 // todo config should be validated
 const PORT = process.env.PORT;
 const API_KEY = process.env.API_KEY;
+const JWT_SECRET = process.env.JWT_SECRET ?? "";
 const app: Application = Express();
 
 app.use(Cors());
@@ -137,6 +194,40 @@ const validateCreateUserBodyMiddleware = [
   },
 ];
 
+interface decodedToken {
+  userId: string;
+  username: string;
+}
+
+const verifyTokenMiddleware = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  const token = req.header("Authorization");
+
+  if (!token) {
+    return res.status(401).json({
+      statusCode: 401,
+      statusMessage: "unauthorized",
+      statusDescription: "access token is required",
+    });
+  }
+
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET) as decodedToken;
+    req.user = decoded;
+
+    next();
+  } catch (error) {
+    return res.status(400).json({
+      statusCode: 400,
+      statusMessage: "unauthorized",
+      statusDescription: "token is invalid",
+    });
+  }
+};
+
 // routes
 app.post(
   "/v1/user/create",
@@ -156,8 +247,6 @@ app.post(
 
       const newUser = await UserTable.create({ username });
       const newUserId = newUser.userId;
-      // todo config should be validated
-      const JWT_SECRET = process.env.JWT_SECRET ?? "";
 
       const accessTokenExpiresIn = 3600; // 1 hour in seconds
       const refreshTokenExpiresIn = 604800; // 7 days in seconds
@@ -186,6 +275,52 @@ app.post(
             refreshToken,
             refreshTokenExpiresAt: new Date(refreshTokenExpiresAt * 1000),
             refreshTokenExpiresIn,
+          },
+        },
+      });
+    } catch (error: any) {
+      return res.status(500).json({
+        statusCode: 500,
+        statusMessage: "internal server error",
+        statusDescription: error.message ?? "",
+      });
+    }
+  }
+);
+
+app.get(
+  "/v1/user/balance",
+  verifyTokenMiddleware,
+  async (req: Request, res: Response) => {
+    if (!req.user) {
+      return res.status(400).json({
+        statusCode: 400,
+        statusMessage: "unauthorized",
+        statusDescription: "user is invalid",
+      });
+    }
+
+    try {
+      const { userId } = req.user;
+
+      const dataWallet = await WalletTable.findOne({ where: { userId } });
+      if (dataWallet === null) {
+        return res.status(404).json({
+          statusCode: 404,
+          statusMessage: "not found",
+          statusDescription: "wallet not found",
+        });
+      }
+
+      return res.status(200).send({
+        statusCode: 200,
+        statusMessage: "ok",
+        statusDescription: "request succeded without error",
+        result: {
+          errorCode: "00",
+          errorMessage: "success",
+          data: {
+            balance: dataWallet.balance,
           },
         },
       });
