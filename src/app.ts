@@ -11,6 +11,7 @@ import {
   DataTypes,
 } from "sequelize";
 import jwt from "jsonwebtoken";
+import { validateApiKey } from "./middleware/validate_api_key";
 
 // config
 Dotenv.config();
@@ -195,7 +196,6 @@ WalletLogTable.belongsTo(WalletTable, {
 // app
 // todo config should be validated
 const PORT = process.env.PORT;
-const API_KEY = process.env.API_KEY;
 const JWT_SECRET = process.env.JWT_SECRET ?? "";
 const app: Application = Express();
 
@@ -204,19 +204,6 @@ app.use(Express.json());
 app.use(Express.urlencoded({ extended: false }));
 
 // middleware
-const apiKeyMiddleware = (req: Request, res: Response, next: NextFunction) => {
-  const apiKey = req.header("Authorization");
-
-  if (apiKey !== API_KEY) {
-    return res.status(401).json({
-      statusCode: 401,
-      statusMessage: "unauthorized",
-      statusDescription: "please ensure you have the correct api key",
-    });
-  }
-
-  next();
-};
 
 const validateCreateUserBodyMiddleware = [
   body("username")
@@ -351,7 +338,7 @@ const validateTransferBodyMiddleware = [
 // routes
 app.post(
   "/v1/user/create",
-  apiKeyMiddleware,
+  validateApiKey,
   validateCreateUserBodyMiddleware,
   async (req: Request, res: Response) => {
     try {
