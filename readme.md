@@ -14,3 +14,10 @@
 - test app: `npm run test`
 
 take a note when running script start app, make sure run build app first.
+
+### TODO
+
+- [ ] add rollback mechanism when failed in transfer service
+- [ ] add rollback mechanism when failed in top up service
+- [ ] unit test
+- [ ] refactor based on features
