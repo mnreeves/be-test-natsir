@@ -10,11 +10,13 @@ import {
   CreationOptional,
   DataTypes,
 } from "sequelize";
+import jwt from "jsonwebtoken";
 
 // config
 Dotenv.config();
 
 // database
+// todo config should be validated
 const DB_HOST = process.env.DB_HOST ?? "";
 const DB_USER = process.env.DB_USER ?? "";
 const DB_PASSWORD = process.env.DB_PASSWORD ?? "";
@@ -79,6 +81,7 @@ UserTable.init(
 UserTable.sync();
 
 // app
+// todo config should be validated
 const PORT = process.env.PORT;
 const API_KEY = process.env.API_KEY;
 const app: Application = Express();
@@ -140,10 +143,59 @@ app.post(
   apiKeyMiddleware,
   validateCreateUserBodyMiddleware,
   async (req: Request, res: Response) => {
-    res.status(200).send({
-      message: "okay",
-      result: req.body,
-    });
+    try {
+      const username: string = req.body.username;
+      const dataUser = await UserTable.findOne({ where: { username } });
+      if (dataUser !== null) {
+        return res.status(400).json({
+          statusCode: 400,
+          statusMessage: "bad request",
+          statusDescription: "username already exist",
+        });
+      }
+
+      const newUser = await UserTable.create({ username });
+      const newUserId = newUser.id;
+      // todo config should be validated
+      const JWT_SECRET = process.env.JWT_SECRET ?? "";
+
+      const accessTokenExpiresIn = 3600; // 1 hour in seconds
+      const refreshTokenExpiresIn = 604800; // 7 days in seconds
+      const now = Math.floor(Date.now() / 1000);
+      const accessTokenExpiresAt = now + accessTokenExpiresIn;
+      const refreshTokenExpiresAt = now + refreshTokenExpiresIn;
+
+      const accessToken = jwt.sign(
+        { userId: newUserId, username, exp: accessTokenExpiresAt },
+        JWT_SECRET
+      );
+      const refreshToken = jwt.sign(
+        { userId: newUserId, username, exp: refreshTokenExpiresAt },
+        JWT_SECRET
+      );
+
+      return res.status(201).send({
+        statusCode: 201,
+        statusMessage: "created",
+        statusDescription: "resource created",
+        result: {
+          data: {
+            accessToken,
+            accessTokenExpiresAt: new Date(accessTokenExpiresAt * 1000),
+            accessTokenExpiresIn,
+            refreshToken,
+            refreshTokenExpiresAt: new Date(refreshTokenExpiresAt * 1000),
+            refreshTokenExpiresIn,
+          },
+        },
+      });
+    } catch (error: any) {
+      return res.status(500).json({
+        statusCode: 500,
+        statusMessage: "internal server error",
+        statusDescription: error.message ?? "",
+      });
+    }
   }
 );
 
