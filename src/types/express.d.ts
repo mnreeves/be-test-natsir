@@ -5,5 +5,6 @@ declare namespace Express {
       username: string;
     };
     amount?: number;
+    username?: string;
   }
 }
