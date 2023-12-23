@@ -12,6 +12,8 @@ import { config } from "./config/config";
 import { UserTable } from "./model/user_table";
 import { createUser } from "./service/create_user";
 import { verifyToken } from "./middleware/verify_token";
+import { validateAmountTopUp } from "./middleware/validate_amount_top_up";
+import { validateAmountTransfer } from "./middleware/validate_amount_transfer";
 
 // config
 Dotenv.config();
@@ -40,37 +42,6 @@ app.use(Express.json());
 app.use(Express.urlencoded({ extended: false }));
 
 // middleware
-
-const validateTopUpBalanceMiddleware = [
-  body("amount")
-    .notEmpty()
-    .withMessage("amount is required")
-    .toInt()
-    .isInt({ min: 1, max: 10000000 })
-    .withMessage(
-      "amount should be integer and greater than 0 or less than 10,000,000"
-    ),
-
-  (req: Request, res: Response, next: NextFunction) => {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      // could be changed the shape of response later,
-      // but for now only need to take the error message
-      const statusDescription =
-        errors.array().length > 0
-          ? errors.array()[0].msg ?? "bad request"
-          : "bad request";
-      return res.status(400).json({
-        statusCode: 400,
-        statusMessage: "bad request",
-        statusDescription,
-      });
-    }
-
-    req.amount = req.body.amount;
-    next();
-  },
-];
 
 const validateTransferBodyMiddleware = [
   body("username")
@@ -157,7 +128,7 @@ app.get(
 app.post(
   "/v1/user/balance",
   verifyToken,
-  validateTopUpBalanceMiddleware,
+  validateAmountTopUp,
   async (req: Request, res: Response) => {
     if (!req.user) {
       return res.status(400).json({
@@ -222,7 +193,7 @@ app.post(
 app.post(
   "/v1/user/transfer",
   verifyToken,
-  validateTopUpBalanceMiddleware,
+  validateAmountTransfer,
   validateTransferBodyMiddleware,
   async (req: Request, res: Response) => {
     if (!req.user) {
