@@ -2,9 +2,83 @@ import Express, { Application, NextFunction, Request, Response } from "express";
 import Cors from "cors";
 import Dotenv from "dotenv";
 import { body, validationResult } from "express-validator";
+import {
+  Model,
+  InferAttributes,
+  Sequelize,
+  InferCreationAttributes,
+  CreationOptional,
+  DataTypes,
+} from "sequelize";
 
+// config
 Dotenv.config();
 
+// database
+const DB_HOST = process.env.DB_HOST ?? "";
+const DB_USER = process.env.DB_USER ?? "";
+const DB_PASSWORD = process.env.DB_PASSWORD ?? "";
+const DB_NAME = process.env.DB_NAME ?? "";
+
+const dbConnection = new Sequelize(DB_NAME, DB_USER, DB_PASSWORD, {
+  host: DB_HOST,
+  dialect: "mysql",
+  logging: false,
+});
+
+(async () => {
+  try {
+    await dbConnection.authenticate();
+    console.log("database has been established successfully");
+  } catch (error: any) {
+    console.error("database connection failed:", error.message);
+    process.exit(1);
+  }
+})();
+
+class UserTable extends Model<
+  InferAttributes<UserTable>,
+  InferCreationAttributes<UserTable>
+> {
+  declare id: CreationOptional<string>;
+  declare username: string;
+  declare createdAt: CreationOptional<string>;
+  declare updatedAt: CreationOptional<string>;
+}
+
+UserTable.init(
+  {
+    id: {
+      type: DataTypes.UUID,
+      defaultValue: DataTypes.UUIDV4,
+      allowNull: false,
+      primaryKey: true,
+    },
+    username: {
+      type: DataTypes.STRING(20),
+      unique: true,
+      allowNull: false,
+    },
+    createdAt: {
+      type: DataTypes.DATE,
+      defaultValue: Sequelize.fn("now"),
+    },
+    updatedAt: {
+      type: DataTypes.DATE,
+      defaultValue: Sequelize.fn("now"),
+    },
+  },
+  {
+    sequelize: dbConnection,
+    timestamps: true,
+    tableName: "tb_users",
+    underscored: true,
+  }
+);
+
+UserTable.sync();
+
+// app
 const PORT = process.env.PORT;
 const API_KEY = process.env.API_KEY;
 const app: Application = Express();
@@ -13,6 +87,7 @@ app.use(Cors());
 app.use(Express.json());
 app.use(Express.urlencoded({ extended: false }));
 
+// middleware
 const apiKeyMiddleware = (req: Request, res: Response, next: NextFunction) => {
   const apiKey = req.header("Authorization");
 
@@ -28,6 +103,9 @@ const apiKeyMiddleware = (req: Request, res: Response, next: NextFunction) => {
 };
 
 const validateCreateUserBodyMiddleware = [
+  // todo:
+  // add validation max length
+  // add validation can not containts space
   body("username")
     .notEmpty()
     .withMessage("username is required")
@@ -54,6 +132,7 @@ const validateCreateUserBodyMiddleware = [
   },
 ];
 
+// routes
 app.post(
   "/v1/user/create",
   apiKeyMiddleware,
