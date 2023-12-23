@@ -15,6 +15,7 @@ import { verifyToken } from "./middleware/verify_token";
 import { validateAmountTopUp } from "./middleware/validate_amount_top_up";
 import { validateAmountTransfer } from "./middleware/validate_amount_transfer";
 import { balanceUser } from "./service/balance_user";
+import { validateTransferBody } from "./middleware/validate_transfer_body";
 
 // config
 Dotenv.config();
@@ -43,39 +44,6 @@ app.use(Express.json());
 app.use(Express.urlencoded({ extended: false }));
 
 // middleware
-
-const validateTransferBodyMiddleware = [
-  body("username")
-    .trim()
-    .notEmpty()
-    .withMessage("username is required")
-    .isLength({ min: 5 })
-    .withMessage("username must be at least 5 characters long")
-    .isLength({ max: 20 })
-    .withMessage("username max 20 characters long")
-    .matches(/^\S*$/)
-    .withMessage("username cannot contain spaces"),
-
-  (req: Request, res: Response, next: NextFunction) => {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      // could be changed the shape of response later,
-      // but for now only need to take the error message
-      const statusDescription =
-        errors.array().length > 0
-          ? errors.array()[0].msg ?? "bad request"
-          : "bad request";
-      return res.status(400).json({
-        statusCode: 400,
-        statusMessage: "bad request",
-        statusDescription,
-      });
-    }
-
-    req.username = req.body.username;
-    next();
-  },
-];
 
 // routes
 app.post("/v1/user/create", validateApiKey, validateCreateUserBody, createUser);
@@ -151,7 +119,7 @@ app.post(
   "/v1/user/transfer",
   verifyToken,
   validateAmountTransfer,
-  validateTransferBodyMiddleware,
+  validateTransferBody,
   async (req: Request, res: Response) => {
     if (!req.user) {
       return res.status(400).json({
