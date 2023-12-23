@@ -42,7 +42,7 @@ class UserTable extends Model<
   InferAttributes<UserTable>,
   InferCreationAttributes<UserTable>
 > {
-  declare id: CreationOptional<string>;
+  declare userId: CreationOptional<string>;
   declare username: string;
   declare createdAt: CreationOptional<string>;
   declare updatedAt: CreationOptional<string>;
@@ -50,7 +50,7 @@ class UserTable extends Model<
 
 UserTable.init(
   {
-    id: {
+    userId: {
       type: DataTypes.UUID,
       defaultValue: DataTypes.UUIDV4,
       allowNull: false,
@@ -155,7 +155,7 @@ app.post(
       }
 
       const newUser = await UserTable.create({ username });
-      const newUserId = newUser.id;
+      const newUserId = newUser.userId;
       // todo config should be validated
       const JWT_SECRET = process.env.JWT_SECRET ?? "";
 
