@@ -1,20 +1,10 @@
 import Express, { Application } from "express";
 import Cors from "cors";
 
-import { validateApiKey } from "./middleware/validate_api_key";
-import { validateCreateUserBody } from "./middleware/validate_create_user_body";
 import { setupDatabase } from "./database/setup";
-import { createUser } from "./service/create_user";
-import { verifyToken } from "./middleware/verify_token";
-import { validateAmountTopUp } from "./middleware/validate_amount_top_up";
-import { validateAmountTransfer } from "./middleware/validate_amount_transfer";
-import { balanceUser } from "./service/balance_user";
-import { validateTransferBody } from "./middleware/validate_transfer_body";
-import { topUp } from "./service/top_up";
-import { transfer } from "./service/transfer";
 import { config } from "./config/config";
+import { v1Router } from "./router/v1_router";
 
-// database
 (async () => {
   try {
     await setupDatabase();
@@ -25,25 +15,13 @@ import { config } from "./config/config";
   }
 })();
 
-// app
 const { PORT } = config;
 const app: Application = Express();
 
 app.use(Cors());
 app.use(Express.json());
 app.use(Express.urlencoded({ extended: false }));
-
-// routes
-app.post("/v1/user/create", validateApiKey, validateCreateUserBody, createUser);
-app.get("/v1/user/balance", verifyToken, balanceUser);
-app.post("/v1/user/balance", verifyToken, validateAmountTopUp, topUp);
-app.post(
-  "/v1/user/transfer",
-  verifyToken,
-  validateAmountTransfer,
-  validateTransferBody,
-  transfer
-);
+app.use("/v1", v1Router);
 
 app.listen(PORT, () => {
   console.log(`server is running on port: ${PORT}`);
