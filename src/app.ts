@@ -3,7 +3,6 @@ import Cors from "cors";
 import Dotenv from "dotenv";
 import { body, validationResult } from "express-validator";
 
-import jwt from "jsonwebtoken";
 import { validateApiKey } from "./middleware/validate_api_key";
 import { validateCreateUserBody } from "./middleware/validate_create_user_body";
 import { setupDatabase } from "./database/setup";
@@ -12,6 +11,7 @@ import { WalletLogTable } from "./model/wallet_log_table";
 import { config } from "./config/config";
 import { UserTable } from "./model/user_table";
 import { createUser } from "./service/create_user";
+import { verifyToken } from "./middleware/verify_token";
 
 // config
 Dotenv.config();
@@ -40,40 +40,6 @@ app.use(Express.json());
 app.use(Express.urlencoded({ extended: false }));
 
 // middleware
-
-interface decodedToken {
-  userId: string;
-  username: string;
-}
-
-const verifyTokenMiddleware = async (
-  req: Request,
-  res: Response,
-  next: NextFunction
-) => {
-  const token = req.header("Authorization");
-
-  if (!token) {
-    return res.status(401).json({
-      statusCode: 401,
-      statusMessage: "unauthorized",
-      statusDescription: "access token is required",
-    });
-  }
-
-  try {
-    const decoded = jwt.verify(token, JWT_SECRET) as decodedToken;
-    req.user = decoded;
-
-    next();
-  } catch (error) {
-    return res.status(400).json({
-      statusCode: 400,
-      statusMessage: "unauthorized",
-      statusDescription: "token is invalid",
-    });
-  }
-};
 
 const validateTopUpBalanceMiddleware = [
   body("amount")
@@ -144,7 +110,7 @@ app.post("/v1/user/create", validateApiKey, validateCreateUserBody, createUser);
 
 app.get(
   "/v1/user/balance",
-  verifyTokenMiddleware,
+  verifyToken,
   async (req: Request, res: Response) => {
     if (!req.user) {
       return res.status(400).json({
@@ -190,7 +156,7 @@ app.get(
 
 app.post(
   "/v1/user/balance",
-  verifyTokenMiddleware,
+  verifyToken,
   validateTopUpBalanceMiddleware,
   async (req: Request, res: Response) => {
     if (!req.user) {
@@ -255,7 +221,7 @@ app.post(
 
 app.post(
   "/v1/user/transfer",
-  verifyTokenMiddleware,
+  verifyToken,
   validateTopUpBalanceMiddleware,
   validateTransferBodyMiddleware,
   async (req: Request, res: Response) => {
