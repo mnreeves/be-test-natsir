@@ -7,6 +7,7 @@ import {
   DataTypes,
 } from "sequelize";
 import { dbConnection } from "../database/setup";
+import { createWallet } from "../hook/create_wallet";
 
 export class UserTable extends Model<
   InferAttributes<UserTable>,
@@ -50,4 +51,5 @@ export const setupUserTable = () => {
   );
 
   UserTable.sync();
+  UserTable.addHook("afterCreate", createWallet);
 };
