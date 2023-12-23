@@ -103,14 +103,16 @@ const apiKeyMiddleware = (req: Request, res: Response, next: NextFunction) => {
 };
 
 const validateCreateUserBodyMiddleware = [
-  // todo:
-  // add validation max length
-  // add validation can not containts space
   body("username")
+    .trim()
     .notEmpty()
     .withMessage("username is required")
     .isLength({ min: 5 })
-    .withMessage("username must be at least 5 characters long"),
+    .withMessage("username must be at least 5 characters long")
+    .isLength({ max: 20 })
+    .withMessage("username max 20 characters long")
+    .matches(/^\S*$/)
+    .withMessage("username cannot contain spaces"),
 
   (req: Request, res: Response, next: NextFunction) => {
     const errors = validationResult(req);
