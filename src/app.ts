@@ -2,37 +2,26 @@ import Express, { Application, NextFunction, Request, Response } from "express";
 import Cors from "cors";
 import Dotenv from "dotenv";
 import { body, validationResult } from "express-validator";
-import {
-  Model,
-  InferAttributes,
-  Sequelize,
-  InferCreationAttributes,
-  CreationOptional,
-  DataTypes,
-} from "sequelize";
+
 import jwt from "jsonwebtoken";
 import { validateApiKey } from "./middleware/validate_api_key";
 import { validateCreateUserBody } from "./middleware/validate_create_user_body";
+import { setupDatabase } from "./database/setup";
+import { WalletTable } from "./model/wallet_table";
+import { WalletLogTable } from "./model/wallet_log_table";
+import { config } from "./config/config";
+import { UserTable } from "./model/user_table";
+import { createUser } from "./service/create_user";
 
 // config
 Dotenv.config();
 
 // database
 // todo config should be validated
-const DB_HOST = process.env.DB_HOST ?? "";
-const DB_USER = process.env.DB_USER ?? "";
-const DB_PASSWORD = process.env.DB_PASSWORD ?? "";
-const DB_NAME = process.env.DB_NAME ?? "";
-
-const dbConnection = new Sequelize(DB_NAME, DB_USER, DB_PASSWORD, {
-  host: DB_HOST,
-  dialect: "mysql",
-  logging: false,
-});
 
 (async () => {
   try {
-    await dbConnection.authenticate();
+    await setupDatabase();
     console.log("database has been established successfully");
   } catch (error: any) {
     console.error("database connection failed:", error.message);
@@ -40,165 +29,11 @@ const dbConnection = new Sequelize(DB_NAME, DB_USER, DB_PASSWORD, {
   }
 })();
 
-class UserTable extends Model<
-  InferAttributes<UserTable>,
-  InferCreationAttributes<UserTable>
-> {
-  declare userId: CreationOptional<string>;
-  declare username: string;
-  declare createdAt: CreationOptional<string>;
-  declare updatedAt: CreationOptional<string>;
-}
-
-UserTable.init(
-  {
-    userId: {
-      type: DataTypes.UUID,
-      defaultValue: DataTypes.UUIDV4,
-      allowNull: false,
-      primaryKey: true,
-    },
-    username: {
-      type: DataTypes.STRING(20),
-      unique: true,
-      allowNull: false,
-    },
-    createdAt: {
-      type: DataTypes.DATE,
-      defaultValue: Sequelize.fn("now"),
-    },
-    updatedAt: {
-      type: DataTypes.DATE,
-      defaultValue: Sequelize.fn("now"),
-    },
-  },
-  {
-    sequelize: dbConnection,
-    timestamps: true,
-    tableName: "tb_users",
-    underscored: true,
-  }
-);
-UserTable.sync();
-
-class WalletTable extends Model<
-  InferAttributes<WalletTable>,
-  InferCreationAttributes<WalletTable>
-> {
-  declare walletId: CreationOptional<string>;
-  declare userId: string;
-  declare balance: number;
-  declare createdAt: CreationOptional<string>;
-  declare updatedAt: CreationOptional<string>;
-}
-
-WalletTable.init(
-  {
-    walletId: {
-      type: DataTypes.UUID,
-      defaultValue: DataTypes.UUIDV4,
-      allowNull: false,
-      primaryKey: true,
-    },
-    userId: {
-      type: DataTypes.UUID,
-      allowNull: false,
-      unique: true,
-    },
-    balance: {
-      type: DataTypes.INTEGER,
-      allowNull: false,
-      defaultValue: 0,
-    },
-    createdAt: {
-      type: DataTypes.DATE,
-      defaultValue: Sequelize.fn("now"),
-    },
-    updatedAt: {
-      type: DataTypes.DATE,
-      defaultValue: Sequelize.fn("now"),
-    },
-  },
-  {
-    sequelize: dbConnection,
-    timestamps: true,
-    tableName: "tb_wallets",
-    underscored: true,
-  }
-);
-WalletTable.sync();
-
-UserTable.hasOne(WalletTable, {
-  as: "Wallet",
-  foreignKey: "userId",
-});
-
-WalletTable.belongsTo(UserTable, {
-  as: "User",
-  foreignKey: "userId",
-});
-
-// todo add type of log, either transfer / top up
-class WalletLogTable extends Model<
-  InferAttributes<WalletLogTable>,
-  InferCreationAttributes<WalletLogTable>
-> {
-  declare walletLogId: CreationOptional<string>;
-  declare walletId: string;
-  declare amount: number;
-  declare createdAt: CreationOptional<string>;
-  declare updatedAt: CreationOptional<string>;
-}
-
-WalletLogTable.init(
-  {
-    walletLogId: {
-      type: DataTypes.UUID,
-      defaultValue: DataTypes.UUIDV4,
-      allowNull: false,
-      primaryKey: true,
-    },
-    walletId: {
-      type: DataTypes.UUID,
-      allowNull: false,
-    },
-    amount: {
-      type: DataTypes.INTEGER,
-      allowNull: false,
-    },
-    createdAt: {
-      type: DataTypes.DATE,
-      defaultValue: Sequelize.fn("now"),
-    },
-    updatedAt: {
-      type: DataTypes.DATE,
-      defaultValue: Sequelize.fn("now"),
-    },
-  },
-  {
-    sequelize: dbConnection,
-    timestamps: true,
-    tableName: "tb_wallets_log",
-    underscored: true,
-  }
-);
-WalletLogTable.sync();
-
-WalletTable.hasOne(WalletLogTable, {
-  as: "WalletLog",
-  foreignKey: "walletId",
-});
-
-WalletLogTable.belongsTo(WalletTable, {
-  as: "Wallet",
-  foreignKey: "walletId",
-});
-
 // app
 // todo config should be validated
 const PORT = process.env.PORT;
-const JWT_SECRET = process.env.JWT_SECRET ?? "";
 const app: Application = Express();
+const { JWT_SECRET } = config;
 
 app.use(Cors());
 app.use(Express.json());
@@ -305,64 +140,7 @@ const validateTransferBodyMiddleware = [
 ];
 
 // routes
-app.post(
-  "/v1/user/create",
-  validateApiKey,
-  validateCreateUserBody,
-  async (req: Request, res: Response) => {
-    try {
-      const username: string = req.body.username;
-      const dataUser = await UserTable.findOne({ where: { username } });
-      if (dataUser !== null) {
-        return res.status(400).json({
-          statusCode: 400,
-          statusMessage: "bad request",
-          statusDescription: "username already exist",
-        });
-      }
-
-      const newUser = await UserTable.create({ username });
-      const newUserId = newUser.userId;
-
-      const accessTokenExpiresIn = 3600; // 1 hour in seconds
-      const refreshTokenExpiresIn = 604800; // 7 days in seconds
-      const now = Math.floor(Date.now() / 1000);
-      const accessTokenExpiresAt = now + accessTokenExpiresIn;
-      const refreshTokenExpiresAt = now + refreshTokenExpiresIn;
-
-      const accessToken = jwt.sign(
-        { userId: newUserId, username, exp: accessTokenExpiresAt },
-        JWT_SECRET
-      );
-      const refreshToken = jwt.sign(
-        { userId: newUserId, username, exp: refreshTokenExpiresAt },
-        JWT_SECRET
-      );
-
-      return res.status(201).send({
-        statusCode: 201,
-        statusMessage: "created",
-        statusDescription: "resource created",
-        result: {
-          data: {
-            accessToken,
-            accessTokenExpiresAt: new Date(accessTokenExpiresAt * 1000),
-            accessTokenExpiresIn,
-            refreshToken,
-            refreshTokenExpiresAt: new Date(refreshTokenExpiresAt * 1000),
-            refreshTokenExpiresIn,
-          },
-        },
-      });
-    } catch (error: any) {
-      return res.status(500).json({
-        statusCode: 500,
-        statusMessage: "internal server error",
-        statusDescription: error.message ?? "",
-      });
-    }
-  }
-);
+app.post("/v1/user/create", validateApiKey, validateCreateUserBody, createUser);
 
 app.get(
   "/v1/user/balance",
