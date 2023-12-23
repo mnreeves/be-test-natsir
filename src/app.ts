@@ -4,6 +4,7 @@ import Cors from "cors";
 import { setupDatabase } from "./database/setup";
 import { config } from "./config/config";
 import { v1Router } from "./router/v1_router";
+import { notFound } from "./middleware/not_found";
 
 (async () => {
   try {
@@ -22,6 +23,7 @@ app.use(Cors());
 app.use(Express.json());
 app.use(Express.urlencoded({ extended: false }));
 app.use("/v1", v1Router);
+app.use(notFound);
 
 app.listen(PORT, () => {
   console.log(`server is running on port: ${PORT}`);
